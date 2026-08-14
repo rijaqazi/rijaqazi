@@ -60,10 +60,16 @@ SERVICE_DEFINITIONS = {
         "cwd": PROJECT_ROOT,
         "port": None,
     },
+    "ingestion": {
+        "label": "STIX ingestion worker",
+        "module": "backend.app.services.intelligence.stix_ingestion",
+        "cwd": PROJECT_ROOT,
+        "port": None,
+    },
 }
 
 DEFAULT_SERVICES = ("upload", "heartbeat", "taxii", "capture")
-PIPELINE_SERVICES = ("cvss", "rules", "ioc")
+PIPELINE_SERVICES = ("cvss", "rules", "ioc", "ingestion")
 
 
 def port_is_available(port):

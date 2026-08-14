@@ -69,7 +69,7 @@ The system is composed of the following core modules:
 Create and configure `.env`, then start the local services from the project root:
 
 ```bash
-python3 scripts/launcher.py all
+python3 scripts/launcher.py all pipeline
 ```
 
 Start an individual service when needed:
@@ -78,6 +78,7 @@ Start an individual service when needed:
 python3 scripts/launcher.py taxii
 python3 scripts/launcher.py heartbeat
 python3 scripts/launcher.py upload
+python3 scripts/launcher.py capture
 ```
 
 `python3 agent/run.py` remains supported and delegates to the same launcher.
@@ -90,7 +91,7 @@ The project is being migrated from standalone scripts to `backend/app/`. The cur
 python3 -m backend.app.main
 ```
 
-See [Architecture](docs/ARCHITECTURE.md) and [running instructions](docs/RUNNING.md).
+See [Architecture](docs/ARCHITECTURE.md), [running instructions](docs/RUNNING.md), and the [workflow command map](docs/WORKFLOWS.md).
 
 1. Register/log in as an organization.
 2. Submit threat data manually, or let the system ingest it from captured logs.

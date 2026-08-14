@@ -1,21 +1,46 @@
 # Running ThreatSentinel
 
-Activate the project environment and configure `.env` before starting any service.
+Activate the project environment and configure `.env` before starting services.
 
 ```bash
+cd ~/Desktop/ThreatSentinel
 source .venv/bin/activate
+```
+
+## Normal local services
+
+```bash
 python3 scripts/launcher.py all
 ```
 
-The launcher starts the existing upload, heartbeat, and TAXII services. Stop all services it started with `Ctrl+C`.
+This starts the secure upload server, heartbeat API, TAXII server, and PCAP parser watcher.
+
+## Full processing pipeline
+
+```bash
+python3 scripts/launcher.py all pipeline
+```
+
+`pipeline` adds the CVSS scoring, rule-generation, IOC/STIX generation, and STIX-ingestion workers. Use this only when MongoDB is configured through `MONGODB_URI`.
+
+Press `Ctrl+C` once to stop every process started by the launcher.
+
+## Optional live capture monitor
+
+The live monitor is opt-in because it needs TShark capture permissions and an explicit network interface.
+
+```bash
+tshark -D
+python3 new_detection/monitor_tshark_trigger.py --interface enp0s3
+```
+
+Replace `enp0s3` with an interface reported by `tshark -D`, or set `CAPTURE_INTERFACE` in `.env`.
 
 ## Central backend API
-
-The new backend application currently provides a health endpoint while legacy functionality is migrated.
 
 ```bash
 python3 -m backend.app.main
 curl http://127.0.0.1:8000/api/v1/health
 ```
 
-The expected response is JSON with `"status": "ok"`.
+The expected response includes `"status": "ok"`.
