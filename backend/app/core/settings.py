@@ -70,7 +70,16 @@ class Settings:
     organization_sync_poll_seconds: int
     capture_input_dir: Path
     parsed_output_dir: Path
+    detector_output_dir: Path
     capture_poll_seconds: int
+    capture_interface: str
+    capture_window_seconds: int
+    capture_packet_limit: int
+    capture_cooldown_seconds: int
+    detector_alert_log_path: Path
+    ioc_output_file: Path
+    ioc_whitelist_file: Path
+    ioc_poll_seconds: int
     file_server_bind_host: str
     reports_output_dir: Path
     report_download_dir: Path
@@ -104,7 +113,16 @@ class Settings:
             organization_sync_poll_seconds=_positive_int("ORGANIZATION_SYNC_POLL_SECONDS", 15),
             capture_input_dir=_project_path("CAPTURE_INPUT_DIR", PROJECT_ROOT / "data" / "captures"),
             parsed_output_dir=_project_path("PARSED_OUTPUT_DIR", PROJECT_ROOT / "data" / "parsed"),
+            detector_output_dir=_project_path("DETECTOR_OUTPUT_DIR", PROJECT_ROOT / "data" / "detector_output"),
             capture_poll_seconds=_positive_int("CAPTURE_POLL_SECONDS", 30),
+            capture_interface=os.getenv("CAPTURE_INTERFACE", ""),
+            capture_window_seconds=_positive_int("CAPTURE_WINDOW_SECONDS", 10),
+            capture_packet_limit=_positive_int("CAPTURE_PACKET_LIMIT", 200),
+            capture_cooldown_seconds=_positive_int("CAPTURE_COOLDOWN_SECONDS", 5),
+            detector_alert_log_path=_project_path("DETECTOR_ALERT_LOG_PATH", PROJECT_ROOT / "new_detection" / "alerts.log"),
+            ioc_output_file=_project_path("IOC_EXTRACTION_OUTPUT", PROJECT_ROOT / "data" / "iocs" / "latest_iocs.json"),
+            ioc_whitelist_file=_project_path("IOC_WHITELIST_FILE", PROJECT_ROOT / "data" / "iocs" / "whitelist.json"),
+            ioc_poll_seconds=_positive_int("IOC_POLL_SECONDS", 30),
             file_server_bind_host=os.getenv("FILE_SERVER_BIND_HOST", "127.0.0.1"),
             reports_output_dir=_project_path("REPORTS_OUTPUT_DIR", PROJECT_ROOT / "Rule_Generation" / "reports"),
             report_download_dir=_project_path("REPORT_DOWNLOAD_DIR", PROJECT_ROOT / "data" / "downloads"),
