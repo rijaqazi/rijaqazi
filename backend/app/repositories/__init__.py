@@ -1,6 +1,6 @@
-"""Data-access repositories."""
+"""Data-access repositories.
 
-from .ioc_repository import IOCRepository
-from .heartbeat_repository import HeartbeatRepository
-
-__all__ = ["HeartbeatRepository", "IOCRepository"]
+Repository implementations are imported directly from their modules. Keeping
+this package initializer dependency-free lets database-free tests run without
+loading optional database clients.
+"""

@@ -5,7 +5,7 @@ Usage:
     Monitor: python3 report.py --monitor --hours 24 --ipinfo TOKEN
 """
 
-import os, io, json, zipfile, base64, argparse, hashlib, requests, math, time
+import os, io, json, zipfile, base64, argparse, hashlib, requests, math, time, sys
 from datetime import datetime, timedelta
 from collections import Counter
 from shutil import copy2
@@ -19,52 +19,26 @@ from pymongo import MongoClient
 from bson import ObjectId
 from dateutil import parser as dtparser
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend.app.core.settings import settings
+from backend.app.services.reports.report_analysis import compute_risk, normalize_ipinfo, risk_category
+from backend.app.services.reports.report_paths import RULES_DIR, report_output_paths
+from backend.app.workers.report_worker import ReportGenerationWorker
+
 # --------------------
 # CONFIG
 # --------------------
-MONGO_URI = os.getenv("MONGODB_URI")
+MONGO_URI = settings.mongodb_uri
 if not MONGO_URI:
     raise RuntimeError("MONGODB_URI is not set. Export it before running this script.")
 ALERTS_DB = "Alerts"
 ALERTS_COLLECTION = "Alerts"
-RULES_DIR = "rules_repository"
 
-# Reports aur zip ke alag folders
-REPORTS_BASE_DIR = "/home/defender/Desktop/ThreatSentinel/Bootstrap"
-REPORTS_FOLDER = f"{REPORTS_BASE_DIR}"
-ZIP_FOLDER = f"{REPORTS_BASE_DIR}/zip"
+# Generated artifacts remain in the legacy folder during the migration.
+REPORTS_BASE_DIR, REPORTS_FOLDER, ZIP_FOLDER = map(str, report_output_paths())
 
 CHECK_INTERVAL = 30  # Check every 30 seconds
-
-# --------------------
-# Track processed rules
-# --------------------
-processed_rules = set()
-
-def load_processed_rules():
-    """Load already processed rule IDs from existing reports"""
-    global processed_rules
-    try:
-        # Check zip directory for existing reports
-        zip_dir = os.path.join(REPORTS_BASE_DIR, "zip")
-        if os.path.exists(zip_dir):
-            for filename in os.listdir(zip_dir):
-                if filename.endswith('.zip'):
-                    rule_id = filename.replace('.zip', '')
-                    processed_rules.add(rule_id)
-        
-        # Also check REPORT directory
-        report_dir = os.path.join(REPORTS_BASE_DIR, "REPORT")
-        if os.path.exists(report_dir):
-            for filename in os.listdir(report_dir):
-                if filename.endswith('-report.pdf'):
-                    rule_id = filename.replace('-report.pdf', '')
-                    processed_rules.add(rule_id)
-        
-        print(f"[!] Loaded {len(processed_rules)} previously processed rules")
-    except Exception as e:
-        print(f"[x]  Error loading processed rules: {e}")
-        processed_rules = set()
 
 def load_rule_json(path):
     with open(path, "r", encoding="utf-8") as fh:
@@ -103,20 +77,6 @@ def get_raw_alert(client, alert_id):
     if doc:
         doc["_id"] = str(doc["_id"])
     return doc
-
-def compute_risk(cvss_score, related_count, reputation_score=0.5, asset_criticality=0.5):
-    cvss_norm = (cvss_score or 0) / 10.0
-    freq_norm = min(related_count, 10) / 10.0
-    r = (cvss_norm * 0.50 + freq_norm * 0.30 +
-         reputation_score * 0.15 + asset_criticality * 0.05) * 100.0
-    return round(r, 1)
-
-def risk_category(score):
-    if score >= 85: return "Critical"
-    if score >= 70: return "High"
-    if score >= 40: return "Medium"
-    if score > 0: return "Low"
-    return "None"
 
 def make_pie_chart(counts_dict, title="", top_n=8):
     if not counts_dict:
@@ -163,19 +123,6 @@ def fetch_ipinfo(ip, token=None):
     except:
         return None
     return None
-
-def normalize_ipinfo(ipinfo_data):
-    if not ipinfo_data:
-        return None
-    if "bogon" in ipinfo_data:
-        return {
-            "country": "Private Network",
-            "city": "Internal",
-            "org": None,
-            "raw": ipinfo_data
-        }
-    ipinfo_data["raw"] = ipinfo_data
-    return ipinfo_data
 
 # --------------------
 # HTML Template
@@ -257,11 +204,6 @@ def generate_report_for_rule(rule_json_path, outdir="reports", hours=24, ipinfo_
         rule = load_rule_json(rule_json_path)
         rule_id = rule.get("rule_id") or os.path.splitext(os.path.basename(rule_json_path))[0]
 
-        # Skip if already processed
-        if rule_id in processed_rules:
-            print(f"[>] Skipping already processed rule: {rule_id}")
-            return None
-
         rule.setdefault("target_ip", None)
         rule.setdefault("duration", rule.get("duration_sec", 0))
         rule.setdefault("ports", [])
@@ -341,8 +283,6 @@ def generate_report_for_rule(rule_json_path, outdir="reports", hours=24, ipinfo_
             zf.write(rule_json_path, arcname=f"{rule_id}.json")
             zf.write(pdf_path, arcname=f"{rule_id}-report.pdf")
 
-        # Mark as processed
-        processed_rules.add(rule_id)
         print(f"[+] New report generated: {pdf_path}")
         return {"pdf": pdf_path, "zip": zip_path, "rule_id": rule_id}
     
@@ -350,22 +290,20 @@ def generate_report_for_rule(rule_json_path, outdir="reports", hours=24, ipinfo_
         print(f"[x] Error generating report for {rule_json_path}: {e}")
         return None
 
+
+def load_processed_rules():
+    """Compatibility helper backed by the report worker's artifact scan."""
+    worker = ReportGenerationWorker(RULES_DIR, REPORTS_BASE_DIR, generate_report_for_rule)
+    count = worker.load_processed_reports()
+    print(f"[!] Loaded {count} previously processed rules")
+    return count
+
+
 def generate_reports_for_new_rules(hours=24, ipinfo_token=None):
     """Generate reports for all new rule files in rules_repository"""
-    if not os.path.exists(RULES_DIR):
-        print(f"[!] Rules directory not found: {RULES_DIR}")
-        return []
-    
-    new_reports = []
-    rule_files = [f for f in os.listdir(RULES_DIR) if f.endswith('.json')]
-    
-    for rule_file in rule_files:
-        rule_path = os.path.join(RULES_DIR, rule_file)
-        result = generate_report_for_rule(rule_path, REPORTS_BASE_DIR, hours, ipinfo_token)
-        if result:
-            new_reports.append(result)
-    
-    return new_reports
+    worker = ReportGenerationWorker(RULES_DIR, REPORTS_BASE_DIR, generate_report_for_rule)
+    print(f"[!] Loaded {worker.load_processed_reports()} previously processed rules")
+    return worker.generate_pending_reports(hours, ipinfo_token)
 
 def monitor_and_generate_reports(hours=24, ipinfo_token=None):
     """Continuously monitor for new rules and generate reports"""
@@ -396,9 +334,11 @@ def monitor_and_generate_reports(hours=24, ipinfo_token=None):
         time.sleep(CHECK_INTERVAL)
 
 def main():
+    global REPORTS_BASE_DIR
+
     parser = argparse.ArgumentParser(description="Generate PDF reports from rule JSON files")
     parser.add_argument("--json", help="Single rule JSON file (for one-time use)")
-    parser.add_argument("--out", default="reports")
+    parser.add_argument("--out", default=REPORTS_BASE_DIR)
     parser.add_argument("--hours", type=int, default=24)
     parser.add_argument("--ipinfo", required=True, help="ipinfo.io token (required)")
     parser.add_argument("--monitor", action="store_true", help="Continuous monitoring mode")
@@ -406,7 +346,6 @@ def main():
     args = parser.parse_args()
     
     # Set global output directory
-    global REPORTS_BASE_DIR
     REPORTS_BASE_DIR = args.out
     
     if args.monitor:

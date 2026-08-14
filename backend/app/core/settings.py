@@ -39,6 +39,12 @@ def _positive_int(name: str, default: int) -> int:
     return parsed
 
 
+def _project_path(name: str, default: Path) -> Path:
+    """Resolve relative runtime paths from the project root, not the shell CWD."""
+    path = Path(os.getenv(name, str(default)))
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 @dataclass(frozen=True)
 class Settings:
     """Environment-backed settings shared by migrated services."""
@@ -57,7 +63,17 @@ class Settings:
     backend_bind_host: str
     backend_port: int
     heartbeat_bind_host: str
+    heartbeat_server_url: str
+    agent_company_id: str
+    agent_heartbeat_seconds: int
+    organization_database: str
+    organization_sync_poll_seconds: int
+    capture_input_dir: Path
+    parsed_output_dir: Path
+    capture_poll_seconds: int
     file_server_bind_host: str
+    reports_output_dir: Path
+    report_download_dir: Path
     max_upload_bytes: int
     max_taxii_request_bytes: int
     auth_max_failures: int
@@ -81,7 +97,17 @@ class Settings:
             backend_bind_host=os.getenv("BACKEND_BIND_HOST", "127.0.0.1"),
             backend_port=_positive_int("BACKEND_PORT", 8000),
             heartbeat_bind_host=os.getenv("HEARTBEAT_BIND_HOST", "127.0.0.1"),
+            heartbeat_server_url=os.getenv("HEARTBEAT_SERVER_URL", "http://127.0.0.1:5001/api"),
+            agent_company_id=os.getenv("AGENT_COMPANY_ID", "alpha_corp"),
+            agent_heartbeat_seconds=_positive_int("AGENT_HEARTBEAT_SECONDS", 120),
+            organization_database=os.getenv("ORGANIZATION_DATABASE", "organization1-infosec"),
+            organization_sync_poll_seconds=_positive_int("ORGANIZATION_SYNC_POLL_SECONDS", 15),
+            capture_input_dir=_project_path("CAPTURE_INPUT_DIR", PROJECT_ROOT / "data" / "captures"),
+            parsed_output_dir=_project_path("PARSED_OUTPUT_DIR", PROJECT_ROOT / "data" / "parsed"),
+            capture_poll_seconds=_positive_int("CAPTURE_POLL_SECONDS", 30),
             file_server_bind_host=os.getenv("FILE_SERVER_BIND_HOST", "127.0.0.1"),
+            reports_output_dir=_project_path("REPORTS_OUTPUT_DIR", PROJECT_ROOT / "Rule_Generation" / "reports"),
+            report_download_dir=_project_path("REPORT_DOWNLOAD_DIR", PROJECT_ROOT / "data" / "downloads"),
             max_upload_bytes=_positive_int("MAX_UPLOAD_BYTES", 16 * 1024 * 1024),
             max_taxii_request_bytes=_positive_int("MAX_TAXII_REQUEST_BYTES", 5 * 1024 * 1024),
             auth_max_failures=_positive_int("AUTH_MAX_FAILURES", 5),

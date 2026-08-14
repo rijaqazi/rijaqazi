@@ -46,6 +46,11 @@ def port_is_available(port):
 
 def start_service(name):
     service = SERVICE_DEFINITIONS[name]
+    if name == "upload" and not (service["cwd"] / "creds.json").is_file():
+        raise RuntimeError(
+            "Upload credentials are not initialized. Run 'python3 Rule_Generation/secure_server.py' "
+            "once, create the credentials, stop it, then rerun the launcher."
+        )
     if not port_is_available(service["port"]):
         raise RuntimeError(f"Port {service['port']} is already in use; {service['label']} was not started.")
 
