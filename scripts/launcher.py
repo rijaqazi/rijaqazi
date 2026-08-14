@@ -79,6 +79,7 @@ def start_service(name):
             "Upload credentials are not initialized. Run 'python3 Rule_Generation/secure_server.py' "
             "once, create the credentials, stop it, then rerun the launcher."
         )
+
     if service["port"] is not None and not port_is_available(service["port"]):
         raise RuntimeError(f"Port {service['port']} is already in use; {service['label']} was not started.")
 
@@ -166,3 +167,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
